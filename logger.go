@@ -53,6 +53,8 @@ func (m *CustomLoggerHandler) WithGroup(name string) slog.Handler {
 	return &CustomLoggerHandler{handler: m.handler.WithGroup(name), buffer: m.buffer, mutex: m.mutex}
 }
 
+type ContextUser string
+
 // Handle : customise the log
 func (m *CustomLoggerHandler) Handle(ctx context.Context, r slog.Record) error {
 
@@ -95,11 +97,17 @@ func (m *CustomLoggerHandler) Handle(ctx context.Context, r slog.Record) error {
 		}
 	}
 
-	//initialisation de l'utilisateur
+	//init userid from context
 	userid := "nouser"
 
-	if ctx.Value(m.userid) != nil {
-		userid = fmt.Sprintf("%s", ctx.Value(m.userid))
+	userId, ok := ctx.Value(ContextUser(m.userid)).(string)
+	if ok {
+		userid = userId
+	} else {
+		//test if the client "simply pass userid as string..."
+		if ctx.Value(m.userid) != nil {
+			userid = fmt.Sprintf("%v", ctx.Value(m.userid))
+		}
 	}
 
 	//getting Record attributes
@@ -142,11 +150,4 @@ func NewCustomLogger(outputWriter io.Writer, useridContextValue string) *slog.Lo
 		mutex:   &sync.Mutex{},
 		userid:  useridContextValue,
 	})
-}
-
-type UseridValue string
-
-// NewContext returns a new Context that carries value u.
-func NewContext(ctx context.Context, useridvalue string) context.Context {
-	return context.WithValue(ctx, UseridValue(useridvalue), ctx.Value(useridvalue))
 }
