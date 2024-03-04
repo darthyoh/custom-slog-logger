@@ -5,4 +5,12 @@ Custom logger based on slog used to display nice colored messages including sour
 
 A simple `go get github.com/darthyoh/custom-slog-logger` should install the package in your module.
 
+The following example shows how to use the logger
+
+```
+package main
+
+
+```
+
 

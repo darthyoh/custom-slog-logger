@@ -31,7 +31,7 @@ func colorize(colorCode string, v string) string {
 // In a second time, the useful informations are taken from the buffer, and passed to the final output writer
 // a mutex is used for concurrence safety
 type CustomLoggerHandler struct {
-	writer  io.Writer     //output writer (io.Stderr for example)
+	writer  io.Writer     //output writer (os.Stderr for example)
 	handler slog.Handler  //inner handler
 	buffer  *bytes.Buffer //inner buffer
 	mutex   *sync.Mutex   //mutex used for safe concurrency
@@ -142,4 +142,11 @@ func NewCustomLogger(outputWriter io.Writer, useridContextValue string) *slog.Lo
 		mutex:   &sync.Mutex{},
 		userid:  useridContextValue,
 	})
+}
+
+type UseridValue string
+
+// NewContext returns a new Context that carries value u.
+func NewContext(ctx context.Context, useridvalue string) context.Context {
+	return context.WithValue(ctx, UseridValue(useridvalue), ctx.Value(useridvalue))
 }
