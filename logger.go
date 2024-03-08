@@ -1,13 +1,13 @@
 package customsloglogger
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"path/filepath"
+	"runtime"
 	"strings"
-	"sync"
 )
 
 // definitions of ASCII colors for the logger
@@ -31,26 +31,31 @@ func colorize(colorCode string, v string) string {
 // In a second time, the useful informations are taken from the buffer, and passed to the final output writer
 // a mutex is used for concurrence safety
 type CustomLoggerHandler struct {
-	writer  io.Writer     //output writer (os.Stderr for example)
-	handler slog.Handler  //inner handler
-	buffer  *bytes.Buffer //inner buffer
-	mutex   *sync.Mutex   //mutex used for safe concurrency
-	userid  string        //userid variable name in the context
+	writer           io.Writer   //output writer (os.Stderr for example)
+	userid           string      //userid variable name in the context
+	groupName        string      //groupName for WithGroup use on logger
+	additionnalAttrs []slog.Attr //additional Attributes for With use on logger
 }
 
-// Enabled : necessary method of interface handler : simple delegation to the inner handler
+// Enabled : necessary method of interface handler : accept all level
 func (m *CustomLoggerHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return m.handler.Enabled(ctx, level)
+	return true
 }
 
 // WithAttrs : necessary method of interface handler : simple delegation to the inner handler
 func (m *CustomLoggerHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &CustomLoggerHandler{handler: m.handler.WithAttrs(attrs), buffer: m.buffer, mutex: m.mutex}
+	newHandler := NewCustomLogger(m.writer, m.userid).Handler().(*CustomLoggerHandler)
+	newHandler.groupName = m.groupName
+	newHandler.additionnalAttrs = attrs
+	return newHandler
 }
 
 // WithGroup : necessary method of interface handler : simple delegation to the inner handler
 func (m *CustomLoggerHandler) WithGroup(name string) slog.Handler {
-	return &CustomLoggerHandler{handler: m.handler.WithGroup(name), buffer: m.buffer, mutex: m.mutex}
+	newHandler := NewCustomLogger(m.writer, m.userid).Handler().(*CustomLoggerHandler)
+	newHandler.groupName = name
+	newHandler.additionnalAttrs = m.additionnalAttrs
+	return newHandler
 }
 
 type ContextUser string
@@ -72,55 +77,26 @@ func (m *CustomLoggerHandler) Handle(ctx context.Context, r slog.Record) error {
 		color = COLOR_RED
 	}
 
-	//get the source position (source code)
-	source := ""
-
-	//this information is NOT contained in the Record
-	//so, first call Handle() on the inner handler to get the source position
-	//(this inner handler was created using the inner buffer as output writer...)
-	m.mutex.Lock()
-	defer func() {
-		m.mutex.Unlock()
-		m.buffer.Reset()
-	}()
-
-	if err := m.handler.Handle(ctx, r); err != nil { //generation of the log in the inner buffer
-		return err
+	//init potentiel groupName prefixe
+	groupPrefix := ""
+	if m.groupName != "" {
+		groupPrefix = fmt.Sprintf("%s.", m.groupName)
 	}
 
-	//extraction of the source position from the buffer to the source var
-	sourceKeys := strings.Split(m.buffer.String(), "source=")
-	if len(sourceKeys) == 2 {
-		sourceLocations := strings.Split(sourceKeys[1], " ")
-		if len(sourceLocations) > 1 {
-			source = sourceLocations[0]
-		}
-	}
+	//init final attrs
+	attrs := make([]string, 0)
 
-	//init userid from context
-	userid := "nouser"
-
-	userId, ok := ctx.Value(ContextUser(m.userid)).(string)
-	if ok {
-		userid = userId
-	} else {
-		//test if the client "simply pass userid as string..."
-		if ctx.Value(m.userid) != nil {
-			userid = fmt.Sprintf("%v", ctx.Value(m.userid))
-		}
+	//getting and adding potentialy additionnal attr
+	for _, attr := range m.additionnalAttrs {
+		attrs = append(attrs, fmt.Sprintf("\t- %s%s : %s", groupPrefix, attr.Key, attr.Value))
 	}
 
 	//getting Record attributes
-	attrs := make([]string, 0)
 	r.Attrs(func(a slog.Attr) bool {
-		attrs = append(attrs, fmt.Sprintf(" - %s : %s", a.Key, a.Value))
+
+		attrs = append(attrs, fmt.Sprintf("\t- %s%s : %s", groupPrefix, a.Key, a.Value))
 		return true
 	})
-
-	//add source code position if found
-	if source != "" {
-		attrs = append(attrs, fmt.Sprintf("\n %s@%s", userid, source))
-	}
 
 	//concat output string
 	attrsValues := ""
@@ -128,12 +104,18 @@ func (m *CustomLoggerHandler) Handle(ctx context.Context, r slog.Record) error {
 		attrsValues = fmt.Sprintf("\n%s", strings.Join(attrs, "\n"))
 	}
 
+	// getting source key
+	source := ""
+	if _, file, line, ok := runtime.Caller(2); ok {
+		source = fmt.Sprintf("@%s:%d", filepath.Base(file), line)
+	}
+
 	//final display
 	fmt.Fprintln(
 		m.writer,
 		colorize(color, fmt.Sprintf("===============%s================\n", r.Level.String())),
-		colorize(COLOR_DARKGRAY, r.Time.Format("[2006-01-02 15:04:05]")),
 		colorize(color, r.Message),
+		colorize(COLOR_DARKGRAY, fmt.Sprintf("\n %s %s", r.Time.Format("2006-01-02 15:04:05"), source)),
 		attrsValues,
 		colorize(color, "\n===================================="),
 	)
@@ -142,12 +124,10 @@ func (m *CustomLoggerHandler) Handle(ctx context.Context, r slog.Record) error {
 
 // NewCustomLogger : utility for creating a custom logger
 func NewCustomLogger(outputWriter io.Writer, useridContextValue string) *slog.Logger {
-	b := &bytes.Buffer{}
+
 	return slog.New(&CustomLoggerHandler{
-		writer:  outputWriter,
-		handler: slog.NewTextHandler(b, &slog.HandlerOptions{AddSource: true}),
-		buffer:  b,
-		mutex:   &sync.Mutex{},
-		userid:  useridContextValue,
+		writer:           outputWriter,
+		additionnalAttrs: make([]slog.Attr, 0),
+		groupName:        "",
 	})
 }

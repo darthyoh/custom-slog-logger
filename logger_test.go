@@ -1,8 +1,6 @@
 package customsloglogger
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -15,21 +13,34 @@ func TestHttp(t *testing.T) {
 
 	logger := NewCustomLogger(os.Stderr, "userid")
 
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+	slog.SetDefault(logger)
+
+	mux.HandleFunc("GET /url", func(w http.ResponseWriter, r *http.Request) {
 
 		//Info log : Simple Log, passing context without any attributes
-		logger.LogAttrs(context.WithValue(r.Context(), ContextUser("userid"), "darthyoh"), slog.LevelInfo, "Welcome to API !!!")
+		logger.Info("Welcome to API !!!!")
 
-		//Warn log : Warn Log, passing context with some attrs
-		logger.LogAttrs(context.WithValue(r.Context(), "userid", "darthyoh"), slog.LevelWarn, "Warn level log", slog.String("warning message", "beware the dog"))
+		//Warn log : Warn Log, passing some attrs
+		logger.Warn("Warn level log", "warning_message", "beware the dog !")
 
 		//Error log : error level log, no context passed with attrs
-		logger.LogAttrs(context.TODO(), slog.LevelError, "Error level log",
-			slog.String("error message", "OUCHH !!!"),
-			slog.Int("status code", 7),
-		)
+		logger.Error("Error level log", "error_message", "OUCH", "statut_code", 7)
 
-		fmt.Fprint(w, "Welcome to API !!!\n")
+		//Debug log
+		logger.Debug("Debug level log", "custom-arg", "a value")
+
+		//create a new logger from logger, with a group prefix before each attribute
+		loggerWithGroupPrefix := logger.WithGroup("GroupPrefix")
+		loggerWithGroupPrefix.Warn("Warn level log with group prefix", "warning_message", "beware the dog")
+
+		//create a new logger from logger, with some repetitives attributes
+		loggerWithAttrs := logger.With("url", r.URL)
+		loggerWithAttrs.Error("Error level log with repetitive attribute", "error_message", "OUCH")
+
+		//combining group and additionnal attributes
+		loggerWithGroupAndAttrs := logger.WithGroup("AnotherPrefix").With("url", r.URL)
+		loggerWithGroupAndAttrs.Info("Information", "info_message", "my message")
+
 	})
 
 	if err := http.ListenAndServe("localhost:8080", mux); err != nil {
