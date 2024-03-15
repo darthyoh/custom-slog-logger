@@ -191,7 +191,9 @@ func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 				continue
 			}
 		}
-		textAttrs = append(textAttrs, fmt.Sprintf("\t- %s%s : %s", groupPrefix, attr, v))
+		value := fmt.Sprintf("%s", v)
+		textAttrs = append(textAttrs, fmt.Sprintf("\t- %s%s : %s", groupPrefix, attr, value))
+		jsonAttrs = append(jsonAttrs, slog.String(string(attr), value))
 	}
 
 	//concat output string
