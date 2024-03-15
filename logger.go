@@ -326,11 +326,13 @@ type CustomLogger struct {
 // context keys to check in Handle() to log
 // Even if the keys are string, they are converted into CtxKeyString type
 // to avoid type collision in context
-func (c *CustomLogger) WithCtxAttrsKeys(keys []string) *slog.Logger {
-	newLogger := c.With()
-	newHandler := newLogger.Handler().(*CustomHandler)
+func (c *CustomLogger) WithCtxAttrsKeys(keys []string) *CustomLogger {
+
+	newHandler := c.Handler().(*CustomHandler)
 	for _, key := range keys {
 		newHandler.CtxAttrsKeys = append(newHandler.CtxAttrsKeys, CtxKeyString(key))
 	}
-	return slog.New(newHandler)
+
+	return &CustomLogger{slog.New(newHandler)}
+
 }
