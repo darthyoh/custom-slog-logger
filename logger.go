@@ -3,7 +3,7 @@ Package customsloglogger provides types and utilities for generating logs.
 
 Logger implemented with this package will give you the possibility of :
   - generating leveled logs
-  - on any os.Writer
+  - on any io.Writer
   - with text colored log if needed
   - with all possibilities of standard slog log (source, additionnal attributes, grouped attributes)
   - and if needed, generating JSON logs that can be sent to a third-party http logging service
@@ -50,7 +50,7 @@ type CustomHandlerOptions struct {
 	//of the log statement and add a SourceKey attribute to the output.
 	AddSource bool
 	//TextLog causes the handler to perform text logging in the
-	//default os.Writer
+	//default io.Writer
 	TextLog bool
 	//ColorizeLors causes the handler to add colors to log
 	//for text output, depending of the log level

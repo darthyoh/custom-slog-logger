@@ -1,69 +1,32 @@
 # custom-slog-logger
-Custom logger based on slog used to display nice colored messages including source lines of error and, if provided in context, "userid" value
+Custom logger based on slog used to display nice colored messages on any **io.Writer** including source lines of error. In addition, the logger can be configured to send JSON formatted log to a third-party http server (e.g. a logging microservice)
+
+As a **slog.Logger** using a custom **slog.Handler**, it can be used to generate new logger, with additinonal attributes that will be print each time a **slog.Record** has to be handled (e.g. an user id in the context of a http server), or with a group name (i.e. prefix for the attributes), or both of them.
+
+This logger is customisable with the use of **CustomHandlerOptions**.
 
 ## Installation
 
 A simple `go get github.com/darthyoh/custom-slog-logger` should install the package in your module.
 
-## Usage
+## Basic usage
 
-**custom-slog-logger** is a custom logger based on the **slog** package
-
-The following example shows how to use the logger
+Generate a simple **CustomLogger** with **NewCustomLogger()** utility and start logging :
 
 ```
 package main
 
-import (
-	"context"
-	"fmt"
-	"log"
-	"log/slog"
-	"net/http"
-	"os"
-
-	customsloglogger "github.com/darthyoh/custom-slog-logger"
-)
+import customlogger "github.com/darthyoh/curstom-slog-logger"
 
 func main() {
-	mux := http.NewServeMux()
 
-	logger := customsloglogger.NewCustomLogger(os.Stderr, "userid")
+	//create a new logger with default (nil) *CustomHandlerOptions
+	//will print colored log on os.Stderr, with source code and a default Info level
+	logger := customlogger.NewCustomLogger(os.Stderr, nil)
 
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-
-		//the userid is defined in the "userid" key of context
-		//WARNING : you SHOULD NOT USE DIRECTY A BUILD IN TYPE LIKE THIS :
-		ctx := context.WithValue(r.Context(), "userid", "darthyoh")
-
-		//Info log : Simple Log, passing context without any attributes
-		logger.LogAttrs(ctx, slog.LevelInfo, "Welcome to API !!!")
-
-		//Instead, use the provided ContextUser type
-		ctx2 := context.WithValue(r.Context(), customsloglogger.ContextUser("userid"), "darthyoh")
-		//Warn log : Warn Log, passing context with some attrs
-		logger.LogAttrs(ctx2, slog.LevelWarn, "Warn level log", slog.String("warning message", "beware the dog"))
-
-		//Error log : error level log, no context passed with attrs
-		logger.LogAttrs(context.TODO(), slog.LevelError, "Error level log",
-			slog.String("error message", "OUCHH !!!"),
-			slog.Int("status code", 7),
-		)
-
-		fmt.Fprint(w, "Welcome to API !!!\n")
-	})
-
-	if err := http.ListenAndServe("localhost:8080", mux); err != nil {
-		log.Fatalf("unable to listen")
-	}
+	logger.Info("using custom logger", "an attr", "a value")
+	logger.Error("fatal error", "error_message","the error message")
+	logger.Debug("test debug") //won't be printed : Debug Level in not enough for this logger !
 }
-
 ```
-
-A call to `curl http://localhost:8080` whould produce this log :
-
-![Log result](result.png)
-
-
-
 
