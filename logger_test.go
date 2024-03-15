@@ -1,6 +1,7 @@
 package customsloglogger
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -35,7 +36,7 @@ func mainServer() {
 
 	logger := NewCustomLogger(os.Stderr, nil)
 
-	slog.SetDefault(logger)
+	slog.SetDefault(logger.Logger)
 
 	mux.HandleFunc("GET /url", func(w http.ResponseWriter, r *http.Request) {
 
@@ -80,6 +81,16 @@ func mainServer() {
 			TextLog: false, AddSource: true, JsonLogURL: "http://localhost:8081/logs",
 		}).With("url", r.URL).WithGroup("values")
 		jsonLogger.Info("foo")
+
+		//test logger with context args
+		ctx := context.WithValue(r.Context(), CtxKeyString("id"), "my id")
+		ctxLogger := NewCustomLogger(os.Stderr, &CustomHandlerOptions{
+			ColorizeLogs: true,
+			AddSource:    true,
+			TextLog:      true,
+		}).WithCtxAttrsKeys([]string{"id"})
+
+		ctxLogger.Log(ctx, slog.LevelWarn, "warning with ctx attrs")
 
 		fmt.Fprintf(w, "Done !")
 

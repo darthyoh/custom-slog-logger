@@ -24,6 +24,9 @@ import (
 	"time"
 )
 
+// CtxKeyString is the customsloglogger type defined for passing keys in context
+type CtxKeyString string
+
 // Here are the definitions of ASCII colors for the logger.
 // Theses colors will be used depending of the log level
 const (
@@ -72,16 +75,25 @@ type CustomHandler struct {
 	//GroupName is an optional string the differents attributes will be grouped in
 	//for text logging or for JSON logs sent to third party server.
 	//GroupName can be passed when creating new CustomHandler but a better approach
-	//is to generate a new CustomHandler from another one, using the WithGroup() method to pass group name
+	//is to generate a new CustomHandler from another one, using the WithGroup() method of the CustomLogger
+	//to pass group name
 	GroupName string
 	//AdditionnalAttrs in a []slog.Attr containing additionnal attributes.
 	//If empty, only attributes contained in the slog.Record will be handle.
 	//If all logs contain the same attribute (url, userid, ...) it is a good
 	//approach to add this attribute as "Additionnal Attribute" :
 	//In this case, every log will contain it
-	//AdditionnalAttrs can be passed when creating new CustomHandler but a better approcah
-	//is to generate a new CustomHandler from another one, using the With() method to pass additionnal attributes
-	AdditionnalAttrs []slog.Attr //additional Attributes for "With()" use on logger
+	//AdditionnalAttrs can be passed when creating new CustomHandler but a better approach
+	//is to generate a new CustomHandler from another one, using the With() method of the CustomLogger
+	//to pass additionnal attributes
+	AdditionnalAttrs []slog.Attr
+	//CtxAttrsKeys in a []CtxKeyString containing additionnal attributes the Handle() function
+	//will take in the logs from the context passed to it.
+	//They correspond to keys of the context that will be log
+	//CtxAttrsKeys can be passed when creating new CustomHandler but a better approach
+	//is to generate a new CustomHandler from another one, using the WithCtxAttrsKeys of the CustomLogger
+	//CtxAttrsKeys
+	CtxAttrsKeys []CtxKeyString
 	//Options are the *CustomHandlerOptions
 	Options *CustomHandlerOptions
 }
@@ -169,6 +181,18 @@ func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 		jsonAttrs = append(jsonAttrs, a)
 		return true
 	})
+
+	//getting potential context attributes
+	for _, attr := range m.CtxAttrsKeys {
+		v := ctx.Value(attr)
+		if v == nil {
+			v = ctx.Value(string(attr))
+			if v == nil {
+				continue
+			}
+		}
+		textAttrs = append(textAttrs, fmt.Sprintf("\t- %s%s : %s", groupPrefix, attr, v))
+	}
 
 	//concat output string
 	textAttrsValues := ""
@@ -265,8 +289,7 @@ func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 // - adding source code,
 // - for all logs with a minimum Level of slog.LevelInfo
 // - without sending json log to third party server
-func NewCustomLogger(textWriter io.Writer, options *CustomHandlerOptions) *slog.Logger {
-
+func NewCustomLogger(textWriter io.Writer, options *CustomHandlerOptions) *CustomLogger {
 	internalOptions := &CustomHandlerOptions{
 		ColorizeLogs: true,
 		AddSource:    true,
@@ -279,10 +302,35 @@ func NewCustomLogger(textWriter io.Writer, options *CustomHandlerOptions) *slog.
 		internalOptions = options
 	}
 
-	return slog.New(&CustomHandler{
-		TextWriter:       textWriter,
-		AdditionnalAttrs: make([]slog.Attr, 0),
-		GroupName:        "",
-		Options:          internalOptions,
-	})
+	newLogger := CustomLogger{
+		slog.New(&CustomHandler{
+			TextWriter:       textWriter,
+			CtxAttrsKeys:     []CtxKeyString{},
+			AdditionnalAttrs: make([]slog.Attr, 0),
+			GroupName:        "",
+			Options:          internalOptions,
+		})}
+
+	return &newLogger
+
+}
+
+// CustomLogger is a wrapper around *slog.Logger
+// it simply contains an anonymous *slog.Logger field
+type CustomLogger struct {
+	*slog.Logger
+}
+
+// WithCtxAttrsKeys method allows to generate a new *slogLogger
+// based on the first one, adding a []string of keys representing
+// context keys to check in Handle() to log
+// Even if the keys are string, they are converted into CtxKeyString type
+// to avoid type collision in context
+func (c *CustomLogger) WithCtxAttrsKeys(keys []string) *slog.Logger {
+	newLogger := c.With()
+	newHandler := newLogger.Handler().(*CustomHandler)
+	for _, key := range keys {
+		newHandler.CtxAttrsKeys = append(newHandler.CtxAttrsKeys, CtxKeyString(key))
+	}
+	return slog.New(newHandler)
 }
