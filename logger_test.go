@@ -41,16 +41,16 @@ func mainServer() {
 	mux.HandleFunc("GET /url", func(w http.ResponseWriter, r *http.Request) {
 
 		//Info log : Simple Log, passing context without any attributes
-		logger.Info("Welcome to API !!!!")
+		logger.Info("Welcome to API !!!!", true, false)
 
 		//Warn log : Warn Log, passing some attrs
-		logger.Warn("Warn level log", "warning_message", "beware the dog !")
+		logger.Warn("Warn level log", true, false, "warning_message", "beware the dog !")
 
 		//Error log : error level log, no context passed with attrs
-		logger.Error("Error level log", "error_message", "OUCH", "statut_code", 7)
+		logger.Error("Error level log", true, false, "error_message", "OUCH", "statut_code", 7)
 
 		//Debug log
-		logger.Debug("Debug level log", "custom-arg", "a value")
+		logger.Debug("Debug level log", true, false, "custom-arg", "a value")
 
 		//create a new logger from logger, with a group prefix before each attribute
 		loggerWithGroupPrefix := logger.WithGroup("GroupPrefix")
@@ -65,20 +65,20 @@ func mainServer() {
 		loggerWithGroupAndAttrs.Info("Information", "info_message", "my message")
 
 		//test other logger, without colorized text output
-		monoLogger := NewCustomLogger(os.Stderr, &CustomHandlerOptions{ColorizeLogs: false, AddSource: true, TextLog: true, MinimumLevel: 40})
-		monoLogger.Info("test black and white")
+		monoLogger := NewCustomLogger(os.Stderr, &CustomHandlerOptions{ColorizeLogs: false, AddSource: true, MinimumLevel: 40})
+		monoLogger.Info("test black and white", true, false)
 
 		//same thing with an attr
 		monoLoggerWithAttrs := monoLogger.With("url", r.URL)
 		monoLoggerWithAttrs.Warn("warning !")
 
 		//other logger, without colorized text output nor source
-		monoLogger = NewCustomLogger(os.Stderr, &CustomHandlerOptions{ColorizeLogs: false, AddSource: false, TextLog: true, MinimumLevel: 40})
-		monoLogger.Info("test black and white")
+		monoLogger = NewCustomLogger(os.Stderr, &CustomHandlerOptions{ColorizeLogs: false, AddSource: false, MinimumLevel: 40})
+		monoLogger.Info("test black and white", true, false)
 
 		//test logger with sending http json log to another microservice
 		jsonLogger := NewCustomLogger(os.Stderr, &CustomHandlerOptions{
-			TextLog: false, AddSource: true, JsonLogURL: "http://localhost:8081/logs",
+			AddSource: true, JsonLogURL: "http://localhost:8081/logs",
 		}).With("url", r.URL).WithGroup("values")
 		jsonLogger.Info("foo")
 
@@ -87,10 +87,9 @@ func mainServer() {
 		ctxLogger := NewCustomLogger(os.Stderr, &CustomHandlerOptions{
 			ColorizeLogs: true,
 			AddSource:    true,
-			TextLog:      true,
 		}).WithCtxAttrsKeys([]string{"id"})
 
-		ctxLogger.Log(ctx, slog.LevelWarn, "warning with ctx attrs")
+		ctxLogger.Log(ctx, slog.LevelWarn, "warning with ctx attrs", false, true)
 
 		fmt.Fprintf(w, "Done !")
 

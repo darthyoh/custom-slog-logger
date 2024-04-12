@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -52,9 +53,6 @@ type CustomHandlerOptions struct {
 	//AddSource causes the handler to compute the source code position
 	//of the log statement and add a SourceKey attribute to the output.
 	AddSource bool
-	//TextLog causes the handler to perform text logging in the
-	//default io.Writer
-	TextLog bool
 	//ColorizeLors causes the handler to add colors to log
 	//for text output, depending of the log level
 	ColorizeLogs bool
@@ -96,6 +94,12 @@ type CustomHandler struct {
 	CtxAttrsKeys []CtxKeyString
 	//Options are the *CustomHandlerOptions
 	Options *CustomHandlerOptions
+	//logText defines if the handler log in writer
+	logText bool
+	//sendJson defines if the handler send to json url
+	logJson bool
+	//add Mutex to concurrent safety while modifying logText or logJson
+	*sync.Mutex
 }
 
 // Enabled : interface Handler method
@@ -112,7 +116,7 @@ func (m *CustomHandler) Enabled(ctx context.Context, level slog.Level) bool {
 // (i.e. with the same TextWriter and same Options and same GroupName)
 // but with AdditionnalAttrs that will be logged with each Record attributes
 func (m *CustomHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	newHandler := NewCustomLogger(m.TextWriter, m.Options).Handler().(*CustomHandler)
+	newHandler := NewCustomLogger(m.TextWriter, m.Options).Handler()
 	newHandler.GroupName = m.GroupName
 	newHandler.AdditionnalAttrs = attrs
 	return newHandler
@@ -124,7 +128,7 @@ func (m *CustomHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 // (i.e. with the same TextWriter and same Options and same AdditionnalAttrs)
 // but with a group name that will group every Record attributes
 func (m *CustomHandler) WithGroup(name string) slog.Handler {
-	newHandler := NewCustomLogger(m.TextWriter, m.Options).Handler().(*CustomHandler)
+	newHandler := NewCustomLogger(m.TextWriter, m.Options).Handler()
 	newHandler.GroupName = name
 	newHandler.AdditionnalAttrs = m.AdditionnalAttrs
 	return newHandler
@@ -209,7 +213,7 @@ func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	//final display if logText is true
-	if m.Options.TextLog {
+	if m.logText {
 		fmt.Fprintln(
 			m.TextWriter,
 			colorize(color, fmt.Sprintf("===============%s================\n", r.Level.String()), m.Options.ColorizeLogs),
@@ -221,7 +225,7 @@ func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	//sending to log microservice if option enables it
-	if m.Options.JsonLogURL != "" {
+	if m.Options.JsonLogURL != "" && m.logJson {
 		ch := make(chan int)
 
 		jsonData := map[string]interface{}{
@@ -244,7 +248,6 @@ func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 			for _, attr := range jsonAttrs {
 				jsonData[attr.Key] = attr.Value.String()
 			}
-
 		}
 
 		jsonByte, err := json.Marshal(jsonData)
@@ -274,7 +277,6 @@ func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 		case <-ch:
 		case <-time.After(1 * time.Second):
 		}
-
 	}
 
 	return nil
@@ -295,7 +297,6 @@ func NewCustomLogger(textWriter io.Writer, options *CustomHandlerOptions) *Custo
 	internalOptions := &CustomHandlerOptions{
 		ColorizeLogs: true,
 		AddSource:    true,
-		TextLog:      true,
 		JsonLogURL:   "",
 		MinimumLevel: slog.LevelInfo,
 	}
@@ -311,6 +312,9 @@ func NewCustomLogger(textWriter io.Writer, options *CustomHandlerOptions) *Custo
 			AdditionnalAttrs: make([]slog.Attr, 0),
 			GroupName:        "",
 			Options:          internalOptions,
+			logText:          true,
+			logJson:          true,
+			Mutex:            &sync.Mutex{},
 		})}
 
 	return &newLogger
@@ -329,12 +333,83 @@ type CustomLogger struct {
 // Even if the keys are string, they are converted into CtxKeyString type
 // to avoid type collision in context
 func (c *CustomLogger) WithCtxAttrsKeys(keys []string) *CustomLogger {
-
-	newHandler := c.Handler().(*CustomHandler)
+	newHandler := c.Handler()
 	for _, key := range keys {
 		newHandler.CtxAttrsKeys = append(newHandler.CtxAttrsKeys, CtxKeyString(key))
 	}
-
 	return &CustomLogger{slog.New(newHandler)}
+}
 
+// Handler() return the *CustomHandler
+func (c *CustomLogger) Handler() *CustomHandler {
+	if h, ok := c.Logger.Handler().(*CustomHandler); ok {
+		return h
+	}
+	return nil
+}
+
+// Warn() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
+func (c *CustomLogger) Warn(msg string, logText, logJson bool, args ...any) {
+	if h := c.Handler(); h != nil {
+		h.Lock()
+		defer h.Unlock()
+		h.logJson = logJson
+		h.logText = logText
+	}
+	c.Logger.Warn(msg, args...)
+}
+
+// Info() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
+func (c *CustomLogger) Info(msg string, logText, logJson bool, args ...any) {
+	if h := c.Handler(); h != nil {
+		h.Lock()
+		defer h.Unlock()
+		h.logJson = logJson
+		h.logText = logText
+	}
+	c.Logger.Info(msg, args...)
+}
+
+// Error() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
+func (c *CustomLogger) Error(msg string, logText, logJson bool, args ...any) {
+	if h := c.Handler(); h != nil {
+		h.Lock()
+		defer h.Unlock()
+		h.logJson = logJson
+		h.logText = logText
+	}
+	c.Logger.Error(msg, args...)
+}
+
+// Debug() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
+func (c *CustomLogger) Debug(msg string, logText, logJson bool, args ...any) {
+	if h := c.Handler(); h != nil {
+		h.Lock()
+		defer h.Unlock()
+		h.logJson = logJson
+		h.logText = logText
+	}
+	c.Logger.Debug(msg, args...)
+}
+
+// Log() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
+func (c *CustomLogger) Log(ctx context.Context, level slog.Level, msg string, logText, logJson bool, args ...any) {
+	if h := c.Handler(); h != nil {
+		h.Lock()
+		defer h.Unlock()
+		h.logJson = logJson
+		h.logText = logText
+	}
+	c.Logger.Log(ctx, level, msg, args...)
+}
+
+// LogAttrs() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
+func (c *CustomLogger) LogAttrs(ctx context.Context, level slog.Level, msg string, logText, logJson bool, attrs ...slog.Attr) {
+	if h := c.Handler(); h != nil {
+		h.Lock()
+		defer h.Unlock()
+		h.logJson = logJson
+		h.logText = logText
+	}
+	c.Logger.LogAttrs(ctx, level, msg, attrs...)
 }
