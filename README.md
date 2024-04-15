@@ -22,13 +22,23 @@ func main() {
 
 	//create a new logger with default (nil) *CustomHandlerOptions
 	//will print colored log on os.Stderr, with source code and a default Info level
-	//no json url server in provided
+	//no json url server provided
 	logger := customlogger.NewCustomLogger(os.Stderr, nil)
 
+	//simple Info log
 	logger.Info("using custom logger", "an attr", "a value")
+
+	//simple Error log
 	logger.Error("fatal error", "error_message","the error message")
+
+	//simple Debug log
 	logger.Debug("test debug") //won't be printed : Debug Level in not enough for this logger !
+	
+	//simply log to os.Stderr
 	logger.InfoTextOnly("Info log")
+
+	//simply send to server
+	logger.InfoJsonOnly("Info log") //won't be printed but WON'T BE SENT, cause no jsonurl was provided
 }
 ```
 
