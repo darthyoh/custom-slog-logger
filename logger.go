@@ -110,6 +110,14 @@ func (m *CustomHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return level >= m.Options.MinimumLevel.Level()
 }
 
+func (l *CustomLogger) With(args ...any) *CustomLogger {
+	return &CustomLogger{Logger: l.Logger.With(args...)}
+}
+
+func (l *CustomLogger) WithGroup(name string) *CustomLogger {
+	return &CustomLogger{Logger: l.Logger.WithGroup(name)}
+}
+
 // WithAttrs : interface Handler method.
 // This method is called when the With(attrs []slog.Attr) is called on an initial logger.
 // It returns a new CustomHandler, based on the initial one
@@ -146,7 +154,6 @@ func (m *CustomHandler) WithGroup(name string) slog.Handler {
 // - send all of this in json format to JsonLogUrl if this option is defined
 // The sending to JsonLogUrl server will be "timed out" after 1 second
 func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
-
 	//defines color / log level
 	color := COLOR_WHITE
 
@@ -348,52 +355,8 @@ func (c *CustomLogger) Handler() *CustomHandler {
 	return nil
 }
 
-// Warn() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
-func (c *CustomLogger) Warn(msg string, logText, logJson bool, args ...any) {
-	if h := c.Handler(); h != nil {
-		h.Lock()
-		defer h.Unlock()
-		h.logJson = logJson
-		h.logText = logText
-	}
-	c.Logger.Warn(msg, args...)
-}
-
-// Info() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
-func (c *CustomLogger) Info(msg string, logText, logJson bool, args ...any) {
-	if h := c.Handler(); h != nil {
-		h.Lock()
-		defer h.Unlock()
-		h.logJson = logJson
-		h.logText = logText
-	}
-	c.Logger.Info(msg, args...)
-}
-
-// Error() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
-func (c *CustomLogger) Error(msg string, logText, logJson bool, args ...any) {
-	if h := c.Handler(); h != nil {
-		h.Lock()
-		defer h.Unlock()
-		h.logJson = logJson
-		h.logText = logText
-	}
-	c.Logger.Error(msg, args...)
-}
-
-// Debug() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
-func (c *CustomLogger) Debug(msg string, logText, logJson bool, args ...any) {
-	if h := c.Handler(); h != nil {
-		h.Lock()
-		defer h.Unlock()
-		h.logJson = logJson
-		h.logText = logText
-	}
-	c.Logger.Debug(msg, args...)
-}
-
-// Log() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
-func (c *CustomLogger) Log(ctx context.Context, level slog.Level, msg string, logText, logJson bool, args ...any) {
+// log() general method for logging, called for every Methods
+func (c *CustomLogger) log(ctx context.Context, level slog.Level, msg string, logText, logJson bool, args ...any) {
 	if h := c.Handler(); h != nil {
 		h.Lock()
 		defer h.Unlock()
@@ -403,8 +366,137 @@ func (c *CustomLogger) Log(ctx context.Context, level slog.Level, msg string, lo
 	c.Logger.Log(ctx, level, msg, args...)
 }
 
-// LogAttrs() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
-func (c *CustomLogger) LogAttrs(ctx context.Context, level slog.Level, msg string, logText, logJson bool, attrs ...slog.Attr) {
+// Log() re-defines the method of the inner slog.Logger, text and json logs are enable
+func (c *CustomLogger) Log(ctx context.Context, level slog.Level, msg string, args ...any) {
+	c.log(ctx, level, msg, true, true, args...)
+}
+
+// LogTextOnly() re-defines the method of the inner slog.Logger, text log is enable
+func (c *CustomLogger) LogTextOnly(ctx context.Context, level slog.Level, msg string, args ...any) {
+	c.log(ctx, level, msg, true, false, args...)
+}
+
+// LogJsonOnly() re-defines the method of the inner slog.Logger, json log is enable
+func (c *CustomLogger) LogJsonOnly(ctx context.Context, level slog.Level, msg string, args ...any) {
+	c.log(ctx, level, msg, false, true, args...)
+}
+
+// Warn() re-defines the method of the inner slog.Logger, text and json logs are enable
+func (c *CustomLogger) Warn(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelWarn, msg, true, true, args...)
+}
+
+// WarnTextOnly() re-defines the method of the inner slog.Logger, text log is enable
+func (c *CustomLogger) WarnTextOnly(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelWarn, msg, true, false, args...)
+}
+
+// WarnJsonOnly() re-defines the method of the inner slog.Logger, json log is enable
+func (c *CustomLogger) WarnJsonOnly(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelWarn, msg, false, true, args...)
+}
+
+// WarnContextTextOnly() re-defines the method of the inner slog.Logger, text log is enable
+func (c *CustomLogger) WarnContextTextOnly(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelWarn, msg, true, false, args...)
+}
+
+// WarnContextJsonOnly() re-defines the method of the inner slog.Logger, json log is enable
+func (c *CustomLogger) WarnContextJsonOnly(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelWarn, msg, false, true, args...)
+}
+
+// Info() re-defines the method of the inner slog.Logger, text and json logs are enable
+func (c *CustomLogger) Info(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelInfo, msg, true, true, args...)
+}
+
+// InfoTextOnly() re-defines the method of the inner slog.Logger, text log is enable
+func (c *CustomLogger) InfoTextOnly(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelInfo, msg, true, false, args...)
+}
+
+// InfoJsonOnly() re-defines the method of the inner slog.Logger, json log is enable
+func (c *CustomLogger) InfoJsonOnly(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelInfo, msg, false, true, args...)
+}
+
+// InfoContext() re-defines the method of the inner slog.Logger, text and json logs are enable
+func (c *CustomLogger) InfoContext(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelInfo, msg, true, true, args...)
+}
+
+// InfoContextTextOnly() re-defines the method of the inner slog.Logger, text log is enable
+func (c *CustomLogger) InfoContextTextOnly(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelInfo, msg, true, false, args...)
+}
+
+// InfoContextJsonOnly() re-defines the method of the inner slog.Logger, json log is enable
+func (c *CustomLogger) InfoContextJsonOnly(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelInfo, msg, false, true, args...)
+}
+
+// Error() re-defines the method of the inner slog.Logger, text and json logs are enable
+func (c *CustomLogger) Error(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelError, msg, true, true, args...)
+}
+
+// ErrorTextOnly() re-defines the method of the inner slog.Logger, text log is enable
+func (c *CustomLogger) ErrorTextOnly(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelError, msg, true, false, args...)
+}
+
+// ErrorJsonOnly() re-defines the method of the inner slog.Logger, json log is enable
+func (c *CustomLogger) ErrorJsonOnly(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelError, msg, false, true, args...)
+}
+
+// ErrorContext() re-defines the method of the inner slog.Logger, text and json logs are enable
+func (c *CustomLogger) ErrorContext(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelError, msg, true, true, args...)
+}
+
+// ErrorContextTextOnly() re-defines the method of the inner slog.Logger, text log is enable
+func (c *CustomLogger) ErrorContextTextOnly(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelError, msg, true, false, args...)
+}
+
+// ErrorContextJsonOnly() re-defines the method of the inner slog.Logger, json log is enable
+func (c *CustomLogger) ErrorContextJsonOnly(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelError, msg, false, true, args...)
+}
+
+// Debug() re-defines the method of the inner slog.Logger, text and json logs are enable
+func (c *CustomLogger) Debug(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelDebug, msg, true, true, args...)
+}
+
+// DebugTextOnly() re-defines the method of the inner slog.Logger, text log is enable
+func (c *CustomLogger) DebugTextOnly(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelDebug, msg, true, false, args...)
+}
+
+// DebugJsonOnly() re-defines the method of the inner slog.Logger, json log is enable
+func (c *CustomLogger) DebugJsonOnly(msg string, args ...any) {
+	c.log(context.TODO(), slog.LevelDebug, msg, false, true, args...)
+}
+
+// DebugContext() re-defines the method of the inner slog.Logger, text and json logs are enable
+func (c *CustomLogger) DebugContext(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelDebug, msg, true, true, args...)
+}
+
+// DebugContextTextOnly() re-defines the method of the inner slog.Logger, text log is enable
+func (c *CustomLogger) DebugContextTextOnly(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelDebug, msg, true, false, args...)
+}
+
+// DebugContextJsonOnly() re-defines the method of the inner slog.Logger, json log is enable
+func (c *CustomLogger) DebugContextJsonOnly(ctx context.Context, msg string, args ...any) {
+	c.log(ctx, slog.LevelDebug, msg, false, true, args...)
+}
+
+func (c *CustomLogger) logAttrs(ctx context.Context, level slog.Level, msg string, logText, logJson bool, attrs ...slog.Attr) {
 	if h := c.Handler(); h != nil {
 		h.Lock()
 		defer h.Unlock()
@@ -412,4 +504,19 @@ func (c *CustomLogger) LogAttrs(ctx context.Context, level slog.Level, msg strin
 		h.logText = logText
 	}
 	c.Logger.LogAttrs(ctx, level, msg, attrs...)
+}
+
+// LogAttrs() re-defines the method of the inner slog.Logger, indicating if text and json logs are enable
+func (c *CustomLogger) LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
+	c.logAttrs(ctx, level, msg, true, true, attrs...)
+}
+
+// LogAttrsTextOnly() re-defines the method of the inner slog.Logger, indicating if text log is enable
+func (c *CustomLogger) LogAttrsTextOnly(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
+	c.logAttrs(ctx, level, msg, true, false, attrs...)
+}
+
+// LogAttrsJsonOnly() re-defines the method of the inner slog.Logger, indicating if json logs is enable
+func (c *CustomLogger) LogAttrsJsonOnly(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
+	c.logAttrs(ctx, level, msg, false, true, attrs...)
 }
