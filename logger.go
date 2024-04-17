@@ -215,7 +215,7 @@ func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	// getting source key
 	source := ""
-	if _, file, line, ok := runtime.Caller(3); ok && m.Options.AddSource {
+	if _, file, line, ok := runtime.Caller(2); ok && m.Options.AddSource {
 		source = fmt.Sprintf("@%s:%d", filepath.Base(file), line)
 	}
 
