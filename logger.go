@@ -215,8 +215,21 @@ func (m *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	// getting source key
 	source := ""
-	if _, file, line, ok := runtime.Caller(2); ok && m.Options.AddSource {
-		source = fmt.Sprintf("@%s:%d", filepath.Base(file), line)
+	if m.Options.AddSource {
+		i := 0
+		for {
+			if _, file, line, ok := runtime.Caller(i); ok {
+				if filepath.Base(file) != "logger.go" {
+					source = fmt.Sprintf("@%s:%d", filepath.Base(file), line)
+					break
+				}
+				i++
+
+			} else {
+				fmt.Println(i, "not ok")
+				break
+			}
+		}
 	}
 
 	//final display if logText is true
