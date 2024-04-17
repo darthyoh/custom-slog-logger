@@ -1,6 +1,7 @@
 package customsloglogger
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -112,10 +113,10 @@ func mainServer() {
 
 		//combining group and additionnal attributes
 		loggerWithGroupAndAttrs := logger.WithGroup("AnotherPrefix").With("url", r.URL)
-		loggerWithGroupAndAttrs.InfoTextOnly("Information", "info_message", "my message")
+		loggerWithGroupAndAttrs.InfoTextOnly("Combining group and additionnal attributes", "info_message", "my message")
 
 		//test other logger, without colorized text output
-		monoLogger := NewCustomLogger(os.Stderr, &CustomHandlerOptions{ColorizeLogs: false, AddSource: true, MinimumLevel: 40})
+		monoLogger := NewCustomLogger(os.Stderr, &CustomHandlerOptions{ColorizeLogs: false, AddSource: true, MinimumLevel: 0})
 		monoLogger.InfoTextOnly("test black and white")
 
 		//same thing with an attr
@@ -125,6 +126,15 @@ func mainServer() {
 		//other logger, without colorized text output nor source
 		monoLogger = NewCustomLogger(os.Stderr, &CustomHandlerOptions{ColorizeLogs: false, AddSource: false, MinimumLevel: 40})
 		monoLogger.InfoTextOnly("test black and white")
+
+		//test logger with context Attrs
+		ctxLogger := NewCustomLogger(os.Stderr, &CustomHandlerOptions{ColorizeLogs: true, AddSource: true, MinimumLevel: 0}).WithCtxAttrsKeys([]string{"ctxattr"})
+		ctx := context.WithValue(context.Background(), CtxKeyString("ctxattr"), "myattr")
+		ctxLogger.InfoContext(ctx, "test logger with context attrs")
+
+		//combining context attrs with group and additionnal attr
+		finalLogger := ctxLogger.WithGroup("groupname").With("recurrent_attr", "recurrent_value")
+		finalLogger.WarnContext(ctx, "combining context attrs with group and additionnal attr", "final_key", "final_value")
 	})
 
 	mux.HandleFunc("GET /jsononly", func(w http.ResponseWriter, r *http.Request) {

@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -102,6 +103,25 @@ type CustomHandler struct {
 	*sync.Mutex
 }
 
+// Clone "clones" a CustomHandler
+func (c *CustomHandler) Clone() *CustomHandler {
+	return &CustomHandler{
+		logText:          true,
+		logJson:          true,
+		TextWriter:       c.TextWriter,
+		GroupName:        c.GroupName,
+		Mutex:            &sync.Mutex{},
+		CtxAttrsKeys:     slices.Clone(c.CtxAttrsKeys),
+		AdditionnalAttrs: slices.Clone(c.AdditionnalAttrs),
+		Options: &CustomHandlerOptions{
+			AddSource:    c.Options.AddSource,
+			ColorizeLogs: c.Options.ColorizeLogs,
+			JsonLogURL:   c.Options.JsonLogURL,
+			MinimumLevel: c.Options.MinimumLevel,
+		},
+	}
+}
+
 // Enabled : interface Handler method
 // If true is returned, the Record will be handled.
 // True is returned when the level of the Record is at least
@@ -111,11 +131,18 @@ func (m *CustomHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (l *CustomLogger) With(args ...any) *CustomLogger {
-	return &CustomLogger{Logger: l.Logger.With(args...)}
+	attrs := []slog.Attr{}
+	for i := 0; i < len(args)-1; i += 2 {
+		if i+1 < len(args) {
+			attrs = append(attrs, slog.Attr{Key: fmt.Sprintf("%s", args[i]), Value: slog.AnyValue(args[i+1])})
+		}
+	}
+	return &CustomLogger{slog.New(l.Handler().WithAttrs(attrs))}
 }
 
 func (l *CustomLogger) WithGroup(name string) *CustomLogger {
-	return &CustomLogger{Logger: l.Logger.WithGroup(name)}
+	return &CustomLogger{slog.New(l.Handler().WithGroup(name))}
+
 }
 
 // WithAttrs : interface Handler method.
@@ -124,10 +151,9 @@ func (l *CustomLogger) WithGroup(name string) *CustomLogger {
 // (i.e. with the same TextWriter and same Options and same GroupName)
 // but with AdditionnalAttrs that will be logged with each Record attributes
 func (m *CustomHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	newHandler := NewCustomLogger(m.TextWriter, m.Options).Handler()
-	newHandler.GroupName = m.GroupName
-	newHandler.AdditionnalAttrs = attrs
-	return newHandler
+	handler := m.Clone()
+	handler.AdditionnalAttrs = append(handler.AdditionnalAttrs, attrs...)
+	return handler
 }
 
 // WithGroup : interface Handler method.
@@ -136,10 +162,9 @@ func (m *CustomHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 // (i.e. with the same TextWriter and same Options and same AdditionnalAttrs)
 // but with a group name that will group every Record attributes
 func (m *CustomHandler) WithGroup(name string) slog.Handler {
-	newHandler := NewCustomLogger(m.TextWriter, m.Options).Handler()
-	newHandler.GroupName = name
-	newHandler.AdditionnalAttrs = m.AdditionnalAttrs
-	return newHandler
+	handler := m.Clone()
+	handler.GroupName = name
+	return handler
 }
 
 // Handle : interface Handler method.
